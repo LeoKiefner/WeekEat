@@ -25,10 +25,10 @@ interface MealPlan {
       }>
     } | null
   }>
-} | null
+}
 
 interface GroceryListViewProps {
-  mealPlan: MealPlan
+  mealPlan: MealPlan | null
 }
 
 interface GroceryItem {

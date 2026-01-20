@@ -16,7 +16,7 @@ export default async function NewHouseholdPage() {
     const name = formData.get("name") as string
     if (!name) return
 
-    const household = await createHousehold(name)
+    const household = await createHousehold({ name })
     redirect(`/household/${household.id}/onboarding`)
   }
 

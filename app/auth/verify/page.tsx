@@ -1,9 +1,10 @@
 "use client"
 
+import { Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function VerifyPage() {
+function VerifyPageContent() {
   const searchParams = useSearchParams()
   const email = searchParams.get("email")
 
@@ -33,5 +34,20 @@ export default function VerifyPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-8 bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <p>Chargement...</p>
+        </div>
+      </div>
+    }>
+      <VerifyPageContent />
+    </Suspense>
   )
 }

@@ -715,11 +715,11 @@ export async function searchRecipes(householdId: string, query: string) {
   }
 
   // Rechercher les recettes utilisées dans ce foyer
+  // Note: SQLite ne supporte pas mode: "insensitive", donc on fait une recherche case-insensitive manuelle
   const recipes = await prisma.recipe.findMany({
     where: {
       name: {
         contains: query,
-        mode: "insensitive",
       },
       meals: {
         some: {

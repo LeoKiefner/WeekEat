@@ -79,7 +79,7 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
             unit: ri.unit,
             notes: ri.notes ? [ri.notes] : [],
             checked: false,
-            fromRecipes: [meal.recipe.name],
+            fromRecipes: [meal.recipe!.name],
           })
         }
       })
@@ -198,7 +198,7 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
               Magasin
             </Button>
             <Button
-              variant={viewMode === "cuisine" ? "default" : "outline"}
+              variant={(viewMode as ViewMode) === "cuisine" ? "default" : "outline"}
               size="sm"
               onClick={() => setViewMode("cuisine")}
             >
@@ -264,7 +264,7 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
         <h1 className="text-2xl font-bold">Liste de courses</h1>
         <div className="flex gap-2">
           <Button
-            variant={viewMode === "magasin" ? "default" : "outline"}
+            variant={(viewMode as ViewMode) === "magasin" ? "default" : "outline"}
             size="sm"
             onClick={() => setViewMode("magasin")}
           >
@@ -272,7 +272,7 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
             Magasin
           </Button>
           <Button
-            variant={viewMode === "cuisine" ? "default" : "outline"}
+            variant={(viewMode as ViewMode) === "cuisine" ? "default" : "outline"}
             size="sm"
             onClick={() => setViewMode("cuisine")}
           >

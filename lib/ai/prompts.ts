@@ -28,7 +28,7 @@ export interface MealGenerationContext {
 
 export interface GeneratedMeal {
   name: string
-  description: string
+  description?: string // Optionnel (valeur par défaut: "")
   mealType: 'breakfast' | 'lunch' | 'dinner'
   date: string // ISO date
   prepTime: number // minutes
@@ -47,7 +47,6 @@ export interface GeneratedMeal {
 
 export interface GeneratedWeek {
   meals: GeneratedMeal[]
-  totalCost: number
   seasonalIngredients: string[]
   dishwareScore: number // 1-10, 10 = minimum vaisselle
 }
@@ -164,12 +163,10 @@ JSON (un seul repas):
     "cookTime": 30,
     "servings": 2,
     "tags": ["one-pan"],
-    "estimatedCost": 8.50,
     "instructions": ["Étape 1", "Étape 2"],
     "dishwareTips": "...",
     "ingredients": [{"name": "...", "quantity": 500, "unit": "g"}]
   }],
-  "totalCost": 8.50,
   "seasonalIngredients": [],
   "dishwareScore": 8
 }`
@@ -203,12 +200,10 @@ JSON (un seul repas):
     "cookTime": 30,
     "servings": 2,
     "tags": ["one-pan"],
-    "estimatedCost": 8.50,
     "instructions": ["Étape 1", "Étape 2"],
     "dishwareTips": "...",
     "ingredients": [{"name": "...", "quantity": 500, "unit": "g"}]
   }],
-  "totalCost": 8.50,
   "seasonalIngredients": [],
   "dishwareScore": 8
 }`

@@ -132,7 +132,7 @@ export async function generateWeekMeals(
           fixedResponse = fixedResponse.substring(0, fixedResponse.lastIndexOf('}'))
           fixedResponse += '], "seasonalIngredients": [], "dishwareScore": 5}'
           console.warn('⚠️ Tentative de réparation du JSON tronqué')
-          return parseAIResponse(fixedResponse, GeneratedWeekSchema)
+          return parseAIResponse(fixedResponse, GeneratedWeekSchema) as unknown as GeneratedWeek
         }
       }
     } catch (e) {
@@ -141,7 +141,7 @@ export async function generateWeekMeals(
     throw new Error('Réponse IA tronquée. Veuillez réessayer ou réduire le nombre de repas.')
   }
 
-  return parseAIResponse(response, GeneratedWeekSchema)
+  return parseAIResponse(response, GeneratedWeekSchema) as unknown as GeneratedWeek
 }
 
 /**
@@ -177,7 +177,7 @@ export async function replaceMeal(
     throw new Error('Aucune réponse de l\'IA')
   }
 
-  return parseAIResponse(response, GeneratedWeekSchema)
+  return parseAIResponse(response, GeneratedWeekSchema) as unknown as GeneratedWeek
 }
 
 /**
@@ -220,7 +220,7 @@ export async function getAlternativeWithoutIngredient(
     throw new Error('Aucune réponse de l\'IA')
   }
 
-  return parseAIResponse(response, GeneratedWeekSchema)
+  return parseAIResponse(response, GeneratedWeekSchema) as unknown as GeneratedWeek
 }
 
 /**

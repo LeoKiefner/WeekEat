@@ -2,7 +2,9 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { acceptInvitation } from "@/lib/actions/invitations"
-import { AcceptInvitationForm } from "@/components/app/accept-invitation-form"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 interface JoinPageProps {
   params: {

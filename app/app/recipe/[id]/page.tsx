@@ -47,5 +47,12 @@ export default async function RecipePage({ params }: RecipePageProps) {
     redirect("/app/week")
   }
 
-  return <RecipeView meal={meal} userId={session.user.id} />
+  // TypeScript ne comprend pas que meal.recipe existe après la vérification
+  // On doit utiliser une assertion de type ou restructurer
+  const mealWithRecipe = {
+    ...meal,
+    recipe: meal.recipe, // On sait que recipe existe grâce à la vérification
+  }
+
+  return <RecipeView meal={mealWithRecipe as typeof meal & { recipe: NonNullable<typeof meal.recipe> }} userId={session.user.id} />
 }

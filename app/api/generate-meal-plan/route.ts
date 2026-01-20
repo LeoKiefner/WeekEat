@@ -16,15 +16,19 @@ export async function POST(req: NextRequest) {
 
     console.log("[API] Appel de generateMealPlan...")
     const mealPlan = await generateMealPlan(householdId)
+    // Vérifier si mealPlan a la propriété meals
+    const mealsCount = ('meals' in mealPlan && Array.isArray((mealPlan as any).meals)) 
+      ? (mealPlan as any).meals.length 
+      : 0
     console.log("[API] generateMealPlan terminé, mealPlan:", {
       id: mealPlan.id,
-      mealsCount: mealPlan.meals?.length || 0
+      mealsCount: mealsCount
     })
 
     return NextResponse.json({ 
       success: true,
       mealPlanId: mealPlan.id,
-      mealsCount: mealPlan.meals?.length || 0
+      mealsCount: mealsCount
     })
   } catch (error: any) {
     console.error("[API] Erreur génération:", error)

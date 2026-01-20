@@ -164,7 +164,7 @@ export function MealSlot({ meal, mealPlanId, householdId }: MealSlotProps) {
                   // Si c'est un slot virtuel, le créer d'abord
                   if (isVirtualSlot) {
                     try {
-                      const { ensureMealSlot } = await import("@/lib/actions/meal-plan")
+                      const { ensureMealSlot, replaceMealInPlan } = await import("@/lib/actions/meal-plan")
                       const createdMeal = await ensureMealSlot(mealPlanId, meal.date, meal.mealType as "lunch" | "dinner")
                       await replaceMealInPlan(mealPlanId, createdMeal.id)
                       toast({
@@ -203,7 +203,7 @@ export function MealSlot({ meal, mealPlanId, householdId }: MealSlotProps) {
             <div className="flex items-center gap-1">
               <span className="text-xs">{mealTypeLabel}</span>
               <h4 className="font-medium text-xs line-clamp-1 flex-1">
-                {meal.recipe.name}
+                {meal.recipe!.name}
               </h4>
             </div>
             {meal.prepTime && (

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { signIn } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,7 @@ interface OnboardingData {
   batchCooking: boolean
 }
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
@@ -162,5 +162,20 @@ export default function AuthPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-8 bg-gradient-to-br from-amber-50 via-orange-50 to-pink-50">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⏳</div>
+          <p>Chargement...</p>
+        </div>
+      </div>
+    }>
+      <AuthPageContent />
+    </Suspense>
   )
 }

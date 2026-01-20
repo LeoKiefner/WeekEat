@@ -46,6 +46,7 @@ model Household {
   bannedIngredients BannedIngredient[]
   preferences     HouseholdPreference[]
   constraints     MealConstraint[]
+  invitations     HouseholdInvitation[]
 
   @@map("households")
 }
@@ -233,6 +234,8 @@ model HouseholdInvitation {
   expiresAt   DateTime
   acceptedAt  DateTime?
   createdAt   DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
 
   @@unique([householdId, email])
   @@map("household_invitations")
