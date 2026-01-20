@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserPlus, Ban, X, Edit2, Save, X as XIcon, LogOut, DoorOpen, Mail, RefreshCw } from "lucide-react"
+import { UserPlus, Ban, X, Edit2, Save, X as XIcon, LogOut, DoorOpen, Mail, RefreshCw, Loader2 } from "lucide-react"
 import { inviteToHousehold } from "@/lib/actions/invitations"
 import { useToast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
@@ -96,6 +96,8 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
   const [leaveHouseholdDialog, setLeaveHouseholdDialog] = useState(false)
   const [logoutDialog, setLogoutDialog] = useState(false)
   const [resendingInvitation, setResendingInvitation] = useState<string | null>(null)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [savingPreference, setSavingPreference] = useState<string | null>(null)
 
   useEffect(() => {
     // Initialiser les valeurs des préférences
@@ -171,6 +173,7 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
   }
 
   async function handleSavePreference(key: string, customValue?: string) {
+    setSavingPreference(key)
     try {
       const value = customValue || preferenceValues[key] || ""
       const res = await fetch(`/api/household/${householdId}/preference`, {
@@ -200,6 +203,8 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
         description: "Erreur lors de la sauvegarde",
         variant: "destructive",
       })
+    } finally {
+      setSavingPreference(null)
     }
   }
 
@@ -240,6 +245,7 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
   }
 
   async function handleSaveSettings() {
+    setSavingSettings(true)
     try {
       const res = await fetch(`/api/household/${householdId}/settings`, {
         method: "PUT",
@@ -267,6 +273,8 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
         description: "Erreur lors de la sauvegarde",
         variant: "destructive",
       })
+    } finally {
+      setSavingSettings(false)
     }
   }
 
@@ -506,9 +514,18 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
                 className="w-5 h-5"
               />
             </div>
-            <Button onClick={handleSaveSettings} className="w-full">
-              <Save className="h-4 w-4 mr-2" />
-              Enregistrer les paramètres
+            <Button onClick={handleSaveSettings} className="w-full" disabled={savingSettings}>
+              {savingSettings ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Enregistrer les paramètres
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
@@ -576,9 +593,19 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
                           <Button
                             className="flex-1"
                             onClick={() => handleSavePreference(pref.key)}
+                            disabled={savingPreference === pref.key}
                           >
-                            <Save className="h-4 w-4 mr-2" />
-                            Enregistrer
+                            {savingPreference === pref.key ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Enregistrement...
+                              </>
+                            ) : (
+                              <>
+                                <Save className="h-4 w-4 mr-2" />
+                                Enregistrer
+                              </>
+                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -676,8 +703,13 @@ export function HouseholdView({ householdId, household, userId, userRole, invita
                       <Button
                         size="sm"
                         onClick={() => handleSavePreference(pref.key)}
+                        disabled={savingPreference === pref.key}
                       >
-                        <Save className="h-4 w-4" />
+                        {savingPreference === pref.key ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="h-4 w-4" />
+                        )}
                       </Button>
                       <Button
                         size="sm"

@@ -50,11 +50,6 @@ export function SignInForm() {
           <CardTitle>Email envoyé</CardTitle>
           <CardDescription>
             Vérifiez votre boîte mail et cliquez sur le lien de connexion.
-            {!process.env.NEXT_PUBLIC_EMAIL_CONFIGURED && (
-              <span className="block mt-2 text-orange-600 text-xs">
-                ⚠️ Email non configuré. Vérifiez votre configuration dans .env
-              </span>
-            )}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -73,10 +68,6 @@ export function SignInForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
-              {error}
-              <div className="mt-2 text-xs text-muted-foreground">
-                Pour configurer l'email, voir TEST_AUTH.md
-              </div>
             </div>
           )}
           

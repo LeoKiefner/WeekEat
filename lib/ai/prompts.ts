@@ -6,12 +6,33 @@
  * - Stopper les plans "légumes tristes" et recettes reloues
  * - Forcer des plats désirables (comfort + simples + rapides)
  * - Limiter les légumes imposés (1 à 2 max par repas)
- * - Limiter le nombre d’ingrédients (<= 10) et la complexité (<= 4 étapes)
- * - Supermarché standard, pas d’ingrédients rares
+ * - Limiter le nombre d'ingrédients (<= 10) et la complexité (<= 4 étapes)
+ * - Supermarché standard, pas d'ingrédients rares
  * - One-pan / one-pot réel, pas juste un tag
  */
 
 import { getWeekStart } from "@/lib/utils"
+
+export interface MealGenerationContext {
+  householdId: string
+  bannedIngredients: string[]
+  recentMeals: string[]
+  preferences: {
+    diet?: string[]
+    allergies?: string[]
+    objectives?: string[]
+    timeConstraints?: string[]
+  }
+  meatFrequency?: number
+  mealsPerWeek?: number
+  prioritizeSeasonal: boolean
+  minDishware: boolean
+  constraints?: Array<{
+    date: string
+    type: string
+    description?: string
+  }>
+}
 
 export function generateWeekPrompt(context: MealGenerationContext, weekStart?: Date): string {
   const startDate = weekStart || getWeekStart()

@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { parseTags } from "@/lib/utils"
-import { Clock, MoreVertical, Trash2, RefreshCw, Plus, Search } from "lucide-react"
+import { Clock, MoreVertical, Trash2, RefreshCw, Plus, Search, Loader2 } from "lucide-react"
 import Link from "next/link"
 import {
   DropdownMenu,
@@ -184,8 +184,17 @@ export function MealSlot({ meal, mealPlanId, householdId }: MealSlotProps) {
                     await handleRegenerate()
                   }
                 }} disabled={isRegenerating}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  {isRegenerating ? "Génération..." : "Générer avec l'IA"}
+                  {isRegenerating ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Génération en cours...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Générer avec l'IA
+                    </>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -236,8 +245,17 @@ export function MealSlot({ meal, mealPlanId, householdId }: MealSlotProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleRegenerate} disabled={isRegenerating}>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                {isRegenerating ? "Génération..." : "Régénérer"}
+                {isRegenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Génération en cours...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Régénérer avec l'IA
+                  </>
+                )}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => router.push(`/app/week/add-meal?mealId=${meal.id}`)}>
                 <Search className="h-4 w-4 mr-2" />

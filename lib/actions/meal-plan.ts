@@ -146,7 +146,7 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
   for (const mealData of generated.meals) {
     // Chercher ou créer les ingrédients
     const recipeIngredients = await Promise.all(
-      mealData.ingredients.map(async (ing) => {
+      mealData.ingredients.map(async (ing: { name: string; quantity: number; unit: string; notes?: string }) => {
         let ingredient = await prisma.ingredient.findUnique({
           where: { name: ing.name },
         })
@@ -529,7 +529,7 @@ export async function replaceMealInPlan(
 
   // Créer les ingrédients
   const recipeIngredients = await Promise.all(
-    newMealData.ingredients.map(async (ing) => {
+    newMealData.ingredients.map(async (ing: { name: string; quantity: number; unit: string; notes?: string }) => {
       let ingredient = await prisma.ingredient.findUnique({
         where: { name: ing.name },
       })
