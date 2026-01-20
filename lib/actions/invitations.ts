@@ -89,19 +89,32 @@ export async function inviteToHousehold(householdId: string, email: string) {
   const inviter = household.members.find((m) => m.userId === session.user.id)
   const inviterName = inviter?.user.name || session.user.name || "Un membre"
 
-  const invitationLink = `${process.env.NEXTAUTH_URL}/invite/${invitation.token}`
+  const invitationLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/invite/${invitation.token}`
 
   try {
+    console.log(`[INVITATION] Tentative d'envoi d'invitation à ${email} pour le foyer ${household.name}`)
+    console.log(`[INVITATION] Lien: ${invitationLink}`)
+    console.log(`[INVITATION] Invité par: ${inviterName}`)
+    
     await sendHouseholdInvitation({
       to: email,
       inviterName,
       householdName: household.name,
       invitationLink,
     })
+    
+    console.log(`[INVITATION] ✅ Email d'invitation envoyé avec succès à ${email}`)
   } catch (error: any) {
-    console.error("Erreur envoi invitation:", error)
+    console.error("[INVITATION] ❌ Erreur lors de l'envoi de l'email d'invitation:", error)
+    console.error("[INVITATION] Détails de l'erreur:", {
+      message: error.message,
+      stack: error.stack,
+      email,
+      householdName: household.name,
+      invitationLink,
+    })
     // Ne pas bloquer, l'invitation est créée en DB
-    throw new Error(`Impossible d'envoyer l'email: ${error.message}`)
+    throw new Error(`Impossible d'envoyer l'email: ${error.message || "Erreur inconnue"}`)
   }
 
   revalidatePath(`/household/${householdId}`)

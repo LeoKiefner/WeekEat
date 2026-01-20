@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { signOut } from "next-auth/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserPlus, Ban, X, Edit2, Save, X as XIcon } from "lucide-react"
+import { UserPlus, Ban, X, Edit2, Save, X as XIcon, LogOut, DoorOpen, Mail, RefreshCw } from "lucide-react"
 import { inviteToHousehold } from "@/lib/actions/invitations"
-import { formatCurrency } from "@/lib/utils"
 import { useToast } from "@/components/ui/use-toast"
+import { cn } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+
+type DietType = "vegetarian" | "vegan" | "omnivore" | "pescatarian"
 
 interface HouseholdViewProps {
   householdId: string
@@ -52,9 +55,19 @@ interface HouseholdViewProps {
       value: string
     }>
   } | null
+  userId: string
+  userRole: string
+  invitations?: Array<{
+    id: string
+    email: string
+    token: string
+    expiresAt: Date
+    acceptedAt: Date | null
+    createdAt: Date
+  }>
 }
 
-export function HouseholdView({ householdId, household }: HouseholdViewProps) {
+export function HouseholdView({ householdId, household, userId, userRole, invitations = [] }: HouseholdViewProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [email, setEmail] = useState("")
@@ -67,7 +80,6 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
     prioritizeSeasonal: household?.prioritizeSeasonal || false,
     minDishware: household?.minDishware || false,
   })
-  const [isEditingSettings, setIsEditingSettings] = useState(false)
   const [unbanDialog, setUnbanDialog] = useState<{ open: boolean; ingredientId: string | null; ingredientName: string }>({
     open: false,
     ingredientId: null,
@@ -81,6 +93,9 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
     open: false,
     key: "",
   })
+  const [leaveHouseholdDialog, setLeaveHouseholdDialog] = useState(false)
+  const [logoutDialog, setLogoutDialog] = useState(false)
+  const [resendingInvitation, setResendingInvitation] = useState<string | null>(null)
 
   useEffect(() => {
     // Initialiser les valeurs des préférences
@@ -233,7 +248,6 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
       })
 
       if (res.ok) {
-        setIsEditingSettings(false)
         toast({
           title: "Paramètres sauvegardés",
           variant: "success",
@@ -253,6 +267,60 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
         description: "Erreur lors de la sauvegarde",
         variant: "destructive",
       })
+    }
+  }
+
+  async function handleLeaveHousehold() {
+    try {
+      const res = await fetch(`/api/household/${householdId}/leave`, {
+        method: "POST",
+      })
+
+      if (res.ok) {
+        toast({
+          title: "Tu as quitté le foyer",
+          variant: "success",
+        })
+        router.push("/onboarding")
+      } else {
+        const data = await res.json()
+        toast({
+          title: "Erreur",
+          description: data.error || "Une erreur est survenue",
+          variant: "destructive",
+        })
+      }
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: "Erreur lors de la sortie du foyer",
+        variant: "destructive",
+      })
+    }
+  }
+
+  async function handleLogout() {
+    await signOut({ callbackUrl: "/login" })
+  }
+
+  async function handleResendInvitation(invitationEmail: string) {
+    setResendingInvitation(invitationEmail)
+    try {
+      await inviteToHousehold(householdId, invitationEmail)
+      toast({
+        title: "Invitation renvoyée ! ✉️",
+        description: `Un nouvel email a été envoyé à ${invitationEmail}`,
+        variant: "success",
+      })
+      router.refresh()
+    } catch (err: any) {
+      toast({
+        title: "Erreur",
+        description: err.message || "Une erreur est survenue lors du renvoi de l'invitation",
+        variant: "destructive",
+      })
+    } finally {
+      setResendingInvitation(null)
     }
   }
 
@@ -284,12 +352,6 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Mon foyer</h1>
-        {!isEditingSettings && (
-          <Button variant="outline" size="sm" onClick={() => setIsEditingSettings(true)}>
-            <Edit2 className="h-4 w-4 mr-2" />
-            Modifier
-          </Button>
-        )}
       </div>
 
       {/* Section Membres */}
@@ -315,6 +377,43 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
                 </div>
               </div>
             ))}
+            {/* Affichage des invitations en attente */}
+            {invitations
+              .filter((inv) => !inv.acceptedAt && new Date(inv.expiresAt) > new Date())
+              .map((invitation) => (
+                <div
+                  key={invitation.id}
+                  className="flex items-center justify-between p-2 rounded-lg bg-amber-50 border border-amber-200"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-amber-600" />
+                      <p className="font-medium text-sm">{invitation.email}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Invitation envoyée le {new Date(invitation.createdAt).toLocaleDateString("fr-FR")}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleResendInvitation(invitation.email)}
+                    disabled={resendingInvitation === invitation.email}
+                  >
+                    {resendingInvitation === invitation.email ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Envoi...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Renvoyer
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))}
           </div>
           <form onSubmit={handleInvite} className="flex gap-2">
             <Input
@@ -340,123 +439,78 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {isEditingSettings ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="name">Nom du foyer</Label>
-                <Input
-                  id="name"
-                  value={householdSettings.name}
-                  onChange={(e) =>
-                    setHouseholdSettings({ ...householdSettings, name: e.target.value })
-                  }
-                />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Nom du foyer</Label>
+              <Input
+                id="name"
+                value={householdSettings.name}
+                onChange={(e) =>
+                  setHouseholdSettings({ ...householdSettings, name: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mealsPerWeek">Nombre de repas par semaine</Label>
+              <Input
+                id="mealsPerWeek"
+                type="number"
+                min="1"
+                max="21"
+                value={householdSettings.mealsPerWeek}
+                onChange={(e) =>
+                  setHouseholdSettings({
+                    ...householdSettings,
+                    mealsPerWeek: parseInt(e.target.value) || 7,
+                  })
+                }
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-primary/10">
+              <div>
+                <Label htmlFor="seasonal">Saisonnalité Alsace</Label>
+                <p className="text-xs text-muted-foreground">
+                  Priorité aux produits de saison
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="mealsPerWeek">Nombre de repas par semaine</Label>
-                <Input
-                  id="mealsPerWeek"
-                  type="number"
-                  min="1"
-                  max="21"
-                  value={householdSettings.mealsPerWeek}
-                  onChange={(e) =>
-                    setHouseholdSettings({
-                      ...householdSettings,
-                      mealsPerWeek: parseInt(e.target.value) || 7,
-                    })
-                  }
-                />
+              <input
+                id="seasonal"
+                type="checkbox"
+                checked={householdSettings.prioritizeSeasonal}
+                onChange={(e) =>
+                  setHouseholdSettings({
+                    ...householdSettings,
+                    prioritizeSeasonal: e.target.checked,
+                  })
+                }
+                className="w-5 h-5"
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border border-primary/10">
+              <div>
+                <Label htmlFor="dishware">Vaisselle minimale</Label>
+                <p className="text-xs text-muted-foreground">
+                  Optimiser pour réduire la vaisselle
+                </p>
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg border border-primary/10">
-                <div>
-                  <Label htmlFor="seasonal">Saisonnalité Alsace</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Priorité aux produits de saison
-                  </p>
-                </div>
-                <input
-                  id="seasonal"
-                  type="checkbox"
-                  checked={householdSettings.prioritizeSeasonal}
-                  onChange={(e) =>
-                    setHouseholdSettings({
-                      ...householdSettings,
-                      prioritizeSeasonal: e.target.checked,
-                    })
-                  }
-                  className="w-5 h-5"
-                />
-              </div>
-              <div className="flex items-center justify-between p-3 rounded-lg border border-primary/10">
-                <div>
-                  <Label htmlFor="dishware">Vaisselle minimale</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Optimiser pour réduire la vaisselle
-                  </p>
-                </div>
-                <input
-                  id="dishware"
-                  type="checkbox"
-                  checked={householdSettings.minDishware}
-                  onChange={(e) =>
-                    setHouseholdSettings({
-                      ...householdSettings,
-                      minDishware: e.target.checked,
-                    })
-                  }
-                  className="w-5 h-5"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handleSaveSettings} className="flex-1">
-                  <Save className="h-4 w-4 mr-2" />
-                  Enregistrer
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsEditingSettings(false)
-                    setHouseholdSettings({
-                      name: household?.name || "",
-                      mealsPerWeek: household?.mealsPerWeek || 7,
-                      prioritizeSeasonal: household?.prioritizeSeasonal || false,
-                      minDishware: household?.minDishware || false,
-                    })
-                  }}
-                >
-                  Annuler
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Nom</span>
-                  <span className="font-medium">{household.name}</span>
-                </div>
-                <div className="flex justify-between">
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Repas par semaine</span>
-                  <span className="font-medium">{household.mealsPerWeek}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Saisonnalité</span>
-                  <span className="font-medium">
-                    {household.prioritizeSeasonal ? "✅ Activée" : "❌ Désactivée"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Vaisselle minimale</span>
-                  <span className="font-medium">
-                    {household.minDishware ? "✅ Activée" : "❌ Désactivée"}
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+              <input
+                id="dishware"
+                type="checkbox"
+                checked={householdSettings.minDishware}
+                onChange={(e) =>
+                  setHouseholdSettings({
+                    ...householdSettings,
+                    minDishware: e.target.checked,
+                  })
+                }
+                className="w-5 h-5"
+              />
+            </div>
+            <Button onClick={handleSaveSettings} className="w-full">
+              <Save className="h-4 w-4 mr-2" />
+              Enregistrer les paramètres
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -481,7 +535,130 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
                 key={pref.id}
                 className="p-3 rounded-lg border border-primary/10 bg-primary/5"
               >
-                {editingPreference === pref.key ? (
+                {pref.key === "diet" ? (
+                  <div className="space-y-3">
+                    <Label>{getPreferenceLabel(pref.key)}</Label>
+                    {editingPreference === pref.key ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-2">
+                          {[
+                            { value: "vegetarian" as DietType, emoji: "🥗", label: "Végétarien" },
+                            { value: "vegan" as DietType, emoji: "🌱", label: "Végétalien" },
+                            { value: "omnivore" as DietType, emoji: "🥩", label: "Tout" },
+                            { value: "pescatarian" as DietType, emoji: "🐟", label: "Pescétarien" },
+                          ].map((option) => {
+                            const currentDiet = JSON.parse(preferenceValues[pref.key] || "[]")[0] || ""
+                            return (
+                              <Button
+                                key={option.value}
+                                type="button"
+                                variant={currentDiet === option.value ? "default" : "outline"}
+                                className={cn(
+                                  "h-auto py-4 transition-all",
+                                  currentDiet === option.value && "ring-2 ring-primary ring-offset-2"
+                                )}
+                                onClick={() => {
+                                  setPreferenceValues({
+                                    ...preferenceValues,
+                                    [pref.key]: JSON.stringify([option.value]),
+                                  })
+                                }}
+                              >
+                                <div className="text-center w-full">
+                                  <div className="text-2xl mb-1">{option.emoji}</div>
+                                  <div className="text-sm font-medium">{option.label}</div>
+                                </div>
+                              </Button>
+                            )
+                          })}
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1"
+                            onClick={() => handleSavePreference(pref.key)}
+                          >
+                            <Save className="h-4 w-4 mr-2" />
+                            Enregistrer
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setEditingPreference(null)
+                              // Restaurer la valeur originale
+                              const originalValue = household?.preferences.find(p => p.key === pref.key)?.value || ""
+                              setPreferenceValues({
+                                ...preferenceValues,
+                                [pref.key]: originalValue,
+                              })
+                            }}
+                          >
+                            <XIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            {(() => {
+                              const dietArray = JSON.parse(pref.value || "[]")
+                              const dietLabels: Record<string, string> = {
+                                vegetarian: "🥗 Végétarien",
+                                vegan: "🌱 Végétalien",
+                                omnivore: "🥩 Tout",
+                                pescatarian: "🐟 Pescétarien",
+                              }
+                              return dietArray.map((d: string) => dietLabels[d] || d).join(", ") || "Non défini"
+                            })()}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingPreference(pref.key)}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : pref.key === "meatFrequency" ? (
+                  <div className="space-y-3">
+                    <Label>{getPreferenceLabel(pref.key)}</Label>
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        {pref.value ? `${JSON.parse(pref.value)} repas avec viande / 14 repas total` : "Non défini"}
+                      </p>
+                      {pref.value && (
+                        <>
+                          <input
+                            type="range"
+                            min="0"
+                            max="14"
+                            value={JSON.parse(pref.value)}
+                            onChange={(e) => {
+                              const newValue = Number(e.target.value)
+                              setPreferenceValues({
+                                ...preferenceValues,
+                                [pref.key]: JSON.stringify(newValue),
+                              })
+                            }}
+                            onMouseUp={(e) => {
+                              const newValue = Number((e.target as HTMLInputElement).value)
+                              handleSavePreference(pref.key, JSON.stringify(newValue))
+                            }}
+                            className="w-full"
+                          />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>0 repas</span>
+                            <span className="font-medium">{JSON.parse(pref.value)} repas avec viande</span>
+                            <span>14 repas</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : editingPreference === pref.key ? (
                   <div className="space-y-2">
                     <Label>{getPreferenceLabel(pref.key)}</Label>
                     <div className="flex gap-2">
@@ -515,64 +692,25 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <p className="font-medium">{getPreferenceLabel(pref.key)}</p>
-                      {pref.key === "meatFrequency" ? (
-                        <div className="space-y-2 mt-1">
-                          <p className="text-sm text-muted-foreground">
-                            {pref.value ? `${JSON.parse(pref.value)} repas avec viande / 14 repas total` : "Non défini"}
-                          </p>
-                          {pref.value && (
-                            <>
-                              <input
-                                type="range"
-                                min="0"
-                                max="14"
-                                value={JSON.parse(pref.value)}
-                                onChange={(e) => {
-                                  const newValue = Number(e.target.value)
-                                  setPreferenceValues({
-                                    ...preferenceValues,
-                                    [pref.key]: JSON.stringify(newValue),
-                                  })
-                                }}
-                                onMouseUp={(e) => {
-                                  const newValue = Number((e.target as HTMLInputElement).value)
-                                  handleSavePreference(pref.key, JSON.stringify(newValue))
-                                }}
-                                className="w-full"
-                              />
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>0 repas</span>
-                                <span className="font-medium">{JSON.parse(pref.value)} repas avec viande</span>
-                                <span>14 repas</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          {pref.key === "diet" ? JSON.parse(pref.value || "[]").join(", ") : pref.value || "Non défini"}
-                        </p>
-                      )}
+                      <p className="text-sm text-muted-foreground">
+                        {pref.value || "Non défini"}
+                      </p>
                     </div>
                     <div className="flex gap-1">
-                      {pref.key !== "meatFrequency" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setEditingPreference(pref.key)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {pref.key !== "diet" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => openDeletePreferenceDialog(pref.key)}
-                        >
-                          <XIcon className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingPreference(pref.key)}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openDeletePreferenceDialog(pref.key)}
+                      >
+                        <XIcon className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -703,6 +841,69 @@ export function HouseholdView({ householdId, household }: HouseholdViewProps) {
               disabled={!addPreferenceDialog.key.trim()}
             >
               Ajouter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Section Actions du foyer */}
+      <Card className="border-2 border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <span>⚙️</span> Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => setLeaveHouseholdDialog(true)}
+          >
+            <DoorOpen className="h-4 w-4 mr-2" />
+            Quitter le foyer
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => setLogoutDialog(true)}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Se déconnecter
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Dialog de confirmation pour quitter le foyer */}
+      <AlertDialog open={leaveHouseholdDialog} onOpenChange={setLeaveHouseholdDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Quitter le foyer ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tu ne pourras plus accéder aux repas et listes de courses de ce foyer. Cette action est irréversible.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLeaveHousehold} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Quitter
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de confirmation pour déconnexion */}
+      <AlertDialog open={logoutDialog} onOpenChange={setLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Se déconnecter ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tu devras te reconnecter pour accéder à nouveau à ton compte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout}>
+              Se déconnecter
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

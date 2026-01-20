@@ -305,7 +305,18 @@ export async function getUserHousehold() {
     },
   })
 
-  return household
+  if (!household) {
+    return null
+  }
+
+  // Trouver le rôle de l'utilisateur actuel
+  const currentMember = household.members.find(m => m.userId === session.user.id)
+  const userRole = currentMember?.role || "member"
+
+  return {
+    ...household,
+    userRole,
+  }
 }
 
 export async function banIngredient(householdId: string, ingredientId: string, reason?: string) {
@@ -451,6 +462,58 @@ export async function deletePreference(householdId: string, key: string) {
       householdId_key: {
         householdId,
         key,
+      },
+    },
+  })
+
+  revalidatePath("/app/household")
+  revalidatePath("/app/week")
+}
+
+export async function leaveHousehold(householdId: string) {
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) {
+    throw new Error("Non authentifié")
+  }
+
+  // Vérifier que l'utilisateur est membre du foyer
+  const member = await prisma.householdMember.findUnique({
+    where: {
+      userId_householdId: {
+        userId: session.user.id,
+        householdId,
+      },
+    },
+    include: {
+      household: {
+        include: {
+          members: true,
+        },
+      },
+    },
+  })
+
+  if (!member) {
+    throw new Error("Tu n'es pas membre de ce foyer")
+  }
+
+  // Si c'est le propriétaire et qu'il y a d'autres membres, empêcher la sortie
+  if (member.role === "owner") {
+    const otherMembers = member.household.members.filter(
+      m => m.userId !== session.user.id
+    )
+    
+    if (otherMembers.length > 0) {
+      throw new Error("Tu ne peux pas quitter le foyer car tu es le propriétaire. Transfère d'abord la propriété à un autre membre.")
+    }
+  }
+
+  // Supprimer le membre
+  await prisma.householdMember.delete({
+    where: {
+      userId_householdId: {
+        userId: session.user.id,
+        householdId,
       },
     },
   })

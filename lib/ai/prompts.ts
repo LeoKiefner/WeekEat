@@ -1,245 +1,289 @@
 /**
- * Prompts IA pour la génération de repas
- * Version 1.0 - MVP
+ * Prompts IA pour WeekEat
+ * Version 1.1 - "appétissant + faisable + cosy"
+ *
+ * Objectifs du changement
+ * - Stopper les plans "légumes tristes" et recettes reloues
+ * - Forcer des plats désirables (comfort + simples + rapides)
+ * - Limiter les légumes imposés (1 à 2 max par repas)
+ * - Limiter le nombre d’ingrédients (<= 10) et la complexité (<= 4 étapes)
+ * - Supermarché standard, pas d’ingrédients rares
+ * - One-pan / one-pot réel, pas juste un tag
  */
 
 import { getWeekStart } from "@/lib/utils"
 
-export interface MealGenerationContext {
-  householdId: string
-  bannedIngredients: string[]
-  recentMeals: string[] // Noms des repas des 30 derniers jours
-  preferences: {
-    diet?: string[]
-    allergies?: string[]
-    objectives?: string[]
-    timeConstraints?: string[]
-  }
-  meatFrequency?: number // Nombre de repas avec viande par semaine (0-14, seulement si omnivore)
-  mealsPerWeek: number
-  prioritizeSeasonal: boolean
-  minDishware: boolean
-  constraints?: Array<{
-    date: string
-    type: 'no_meal' | 'meal_prep' | 'restaurant' | 'batch_cook'
-    description?: string
-  }>
-}
-
-export interface GeneratedMeal {
-  name: string
-  description?: string // Optionnel (valeur par défaut: "")
-  mealType: 'breakfast' | 'lunch' | 'dinner'
-  date: string // ISO date
-  prepTime: number // minutes
-  cookTime: number // minutes
-  servings: number
-  tags: string[]
-  instructions: string
-  dishwareTips: string
-  ingredients: Array<{
-    name: string
-    quantity: number
-    unit: string
-    notes?: string
-  }>
-}
-
-export interface GeneratedWeek {
-  meals: GeneratedMeal[]
-  seasonalIngredients: string[]
-  dishwareScore: number // 1-10, 10 = minimum vaisselle
-}
-
-/**
- * Prompt principal : générer une semaine complète de repas
- */
 export function generateWeekPrompt(context: MealGenerationContext, weekStart?: Date): string {
-  // Utiliser la date de début de semaine fournie ou calculer à partir d'aujourd'hui
   const startDate = weekStart || getWeekStart()
   startDate.setHours(0, 0, 0, 0)
-  
-  // Ne générer que les dates à partir d'aujourd'hui (pas les jours passés)
+
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const actualStartDate = startDate < today ? today : startDate
-  
-  // Générer les dates pour les 7 jours de la semaine, mais seulement à partir d'aujourd'hui
+
   const dates: Array<{ date: string; dayLabel: string }> = []
-  const dayNames = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
   const weekEnd = new Date(startDate)
   weekEnd.setDate(startDate.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
-  
-  // Générer les dates uniquement à partir d'aujourd'hui jusqu'à la fin de la semaine
+
   const currentDate = new Date(actualStartDate)
-  let dayIndex = Math.floor((actualStartDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-  
   while (currentDate <= weekEnd) {
     dates.push({
       date: currentDate.toISOString().split("T")[0],
-      dayLabel: dayNames[dayIndex % 7] || `J+${dayIndex}`
+      dayLabel: ""
     })
     currentDate.setDate(currentDate.getDate() + 1)
-    dayIndex++
   }
 
   const currentMonth = new Date().getMonth() + 1
   const seasonalIngredients = getSeasonalIngredientsAlsace(currentMonth)
 
-  // Calculer le nombre de repas à générer : 2 par jour (lunch et dinner) pour les jours restants
   const daysToGenerate = dates.length
-  const targetMeals = daysToGenerate * 2 // 2 repas par jour (lunch et dinner)
+  const targetMeals = daysToGenerate * 2
 
-  return `Génère ${targetMeals} repas pour les ${daysToGenerate} prochains jours (2 par jour: lunch et dinner). Ne génère PAS pour les jours passés.
+  // Préférences condensées
+  const diet = context.preferences?.diet?.join(", ") || "aucune"
+  const allergies = context.preferences?.allergies?.join(", ") || "aucune"
+  const objectives = context.preferences?.objectives?.join(", ") || "aucun"
+  const timeConstraints = context.preferences?.timeConstraints?.join(", ") || "aucune"
 
-DATES: ${dates.map(d => `${d.date}`).join(', ')}
+  // Contraintes calendrier
+  const constraints = (context.constraints || [])
+    .map(c => `${c.date}: ${c.type}${c.description ? ` (${c.description})` : ""}`)
+    .join(" | ") || "aucune"
 
-CONTRAINTES:
-- Bannis: ${context.bannedIngredients.join(', ') || 'aucun'}
-- Déjà mangés: ${context.recentMeals.slice(0, 8).join(', ') || 'aucun'}
-- Saison: ${seasonalIngredients.slice(0, 6).join(', ')}
-- Vaisselle minimale: one-pan prioritaire${context.meatFrequency !== undefined && context.preferences.diet?.includes('omnivore') ? `\n- Viande: ${context.meatFrequency} repas avec viande par semaine (sur ${targetMeals} repas total)` : ''}
+  return `
+Tu es un chef pragmatique + meal-planner. Ton but est de proposer des repas "envie de les faire", simples, rapides, et réalistes pour un supermarché classique.
 
-RÈGLES IMPORTANTES:
-- mealType: uniquement "lunch" ou "dinner" (pas de breakfast)
-- Répartition: 1 lunch et 1 dinner par jour pour chaque date
-- Dates: ${dates[0].date} (lundi) → ${dates[dates.length - 1].date} (dimanche)
-- Instructions: max 4 étapes courtes, format tableau
-- Description: max 15 mots
-- Sois CONCIS pour économiser les tokens
+TÂCHE
+Génère ${targetMeals} repas pour les dates suivantes (2 par jour: lunch + dinner). Ne génère pas pour les jours passés.
 
-JSON:
+DATES (ISO)
+${dates.map(d => d.date).join(", ")}
+
+PROFIL FOYER
+- Portions: ${context.mealsPerWeek ? 2 : 2} (servings = nombre de personnes du foyer, ici laisse "2" par défaut si tu ne sais pas)
+- Régime: ${diet}
+- Allergies: ${allergies}
+- Objectifs: ${objectives}
+- Contraintes temps: ${timeConstraints}
+- Contraintes calendrier: ${constraints}
+
+CONTRAINTES DURES (OBLIGATOIRES)
+1) Ingrédients bannis: ${context.bannedIngredients.join(", ") || "aucun"}
+   - Interdiction absolue: aucun repas ne doit contenir ces ingrédients.
+2) Variété: ne pas proposer un repas déjà mangé dans les 30 derniers jours.
+   - Déjà mangés (à éviter strictement): ${context.recentMeals.slice(0, 25).join(" | ") || "aucun"}
+3) 1 lunch + 1 dinner par date, pour chaque date listée.
+4) Simplicité:
+   - 4 étapes max
+   - 10 ingrédients max (hors sel, poivre, huile)
+   - 1 ustensile principal max (poêle OU casserole OU plaque four)
+5) Supermarché standard:
+   - pas d’ingrédients rares
+   - pas de techniques avancées
+6) "Vaisselle minimale" = vrai:
+   - fais des recettes réellement one-pan / one-pot
+   - pas de bol de marinade séparé, pas de 3 casseroles
+${context.meatFrequency !== undefined && context.preferences.diet?.includes("omnivore")
+  ? `7) Viande: exactement ${context.meatFrequency} repas avec viande sur ${targetMeals} repas.`
+  : ""}
+
+RÈGLES POUR ÉVITER LES "REPAS TRISTES"
+- Priorité à des plats désirables (comfort food) mais équilibrés.
+- Légumes:
+  - max 2 types de légumes par repas
+  - privilégie les légumes faciles et appréciés (carotte, courgette, tomate, haricot vert, salade, concombre, poivron)
+  - évite les légumes clivants et pénibles sauf demande explicite (endive, céleri, navet, chou bouilli, etc.)
+- Le "saisonnier" est un bonus, pas une punition:
+  - utilise au maximum 1 ingrédient de saison principal par repas
+  - liste saison Alsace (suggestions, pas obligation): ${seasonalIngredients.join(", ")}
+
+STYLE DE RECETTES (TRÈS IMPORTANT)
+- Repas "mignons" et simples, qu’un couple a envie de refaire.
+- Exemples de vibe: pâtes crémeuses, rice bowl, wok simple, wraps bowl (sans wrap si tu veux), curry doux, chili doux, gratin simple, salade gourmande, omelette gourmande, poisson au four + légumes simples, poulet au four + pommes de terre, gnocchis poêlés, etc.
+- Interdit: recettes longues, "healthy punitive", listes d’ingrédients interminables.
+
+FORMAT DE SORTIE
+Retourne uniquement du JSON valide, sans texte autour.
+
+SCHÉMA JSON
 {
   "meals": [
     {
-      "name": "Nom",
-      "description": "Courte description",
-      "mealType": "lunch",
-      "date": "${dates[0].date}",
-      "prepTime": 15,
-      "cookTime": 30,
-      "servings": 2,
-      "tags": ["one-pan"],
-      "instructions": ["Étape 1", "Étape 2"],
-      "dishwareTips": "Astuce courte",
-      "ingredients": [{"name": "Ingrédient", "quantity": 500, "unit": "g"}]
+      "name": "string",
+      "description": "string (<= 15 mots)",
+      "mealType": "lunch" | "dinner",
+      "date": "YYYY-MM-DD",
+      "prepTime": number,
+      "cookTime": number,
+      "servings": number,
+      "tags": ["one-pan", "comfort", "quick", "budget", ...],
+      "instructions": ["Étape 1", "Étape 2", "Étape 3", "Étape 4"],
+      "dishwareTips": "string (1 phrase)",
+      "ingredients": [
+        { "name": "string", "quantity": number, "unit": "g|ml|pcs|tbsp|tsp" , "notes": "string optionnel" }
+      ]
     }
   ],
-  "seasonalIngredients": ["chou"],
-  "dishwareScore": 9
-}`
+  "seasonalIngredients": ["string"],
+  "dishwareScore": number
 }
 
-/**
- * Prompt pour remplacer un seul repas
- */
+RAPPELS
+- ingredients <= 10 (hors sel/poivre/huile)
+- steps <= 4
+- Chaque date a 1 lunch + 1 dinner
+- Aucun ingrédient banni
+- Aucun repas similaire aux récents (évite aussi les variantes proches: "pâtes bolo" vs "spaghetti bolognaise")
+`.trim()
+}
+
 export function replaceMealPrompt(
   context: MealGenerationContext,
   dateToReplace: string,
-  mealType: string,
+  mealType: "lunch" | "dinner",
   reason?: string
 ): string {
-  return `Remplace le repas ${mealType} du ${dateToReplace}${reason ? ` (${reason})` : ''}.
+  const banned = context.bannedIngredients.join(", ") || "aucun"
+  const recent = context.recentMeals.slice(0, 20).join(" | ") || "aucun"
+  const currentMonth = new Date(dateToReplace).getMonth() + 1
+  const seasonalIngredients = getSeasonalIngredientsAlsace(currentMonth)
 
-CONTRAINTES:
-- Bannis: ${context.bannedIngredients.slice(0, 5).join(', ') || 'aucun'}
-- Déjà mangés: ${context.recentMeals.slice(0, 5).join(', ') || 'aucun'}
-- Vaisselle minimale
+  return `
+Tu remplaces un seul repas. Objectif: proposer un plat appétissant, simple, rapide, supermarché standard, vaisselle minimale.
 
-RÈGLES:
-- description: REQUIS, 15 mots max
-- instructions: 4 étapes max, format tableau
-- Sois CONCIS
+À REMPLACER
+- date: ${dateToReplace}
+- mealType: ${mealType}
+${reason ? `- raison: ${reason}` : ""}
 
-JSON (un seul repas):
+CONTRAINTES DURES
+- Ingrédients bannis: ${banned}
+- Repas récents à éviter strictement: ${recent}
+- 10 ingrédients max (hors sel/poivre/huile)
+- 4 étapes max
+- 1 ustensile principal max (poêle OU casserole OU plaque four)
+- Légumes max: 2 types
+- Saisonnier (bonus, 0 à 1 ingrédient principal): ${seasonalIngredients.join(", ")}
+
+SORTIE
+Uniquement JSON valide selon ce schéma:
+
 {
   "meals": [{
-    "name": "...",
-    "description": "Courte description (15 mots max)",
+    "name": "string",
+    "description": "string (<= 15 mots)",
     "mealType": "${mealType}",
     "date": "${dateToReplace}",
-    "prepTime": 15,
-    "cookTime": 30,
+    "prepTime": number,
+    "cookTime": number,
     "servings": 2,
-    "tags": ["one-pan"],
-    "instructions": ["Étape 1", "Étape 2"],
-    "dishwareTips": "...",
-    "ingredients": [{"name": "...", "quantity": 500, "unit": "g"}]
+    "tags": ["one-pan", "comfort", "quick"],
+    "instructions": ["Étape 1", "Étape 2", "Étape 3", "Étape 4"],
+    "dishwareTips": "string",
+    "ingredients": [{"name":"string","quantity":number,"unit":"g|ml|pcs|tbsp|tsp"}]
   }],
-  "seasonalIngredients": [],
-  "dishwareScore": 8
-}`
+  "seasonalIngredients": ["string"],
+  "dishwareScore": number
+}
+`.trim()
 }
 
-/**
- * Prompt pour proposer alternative sans ingrédient X
- */
 export function alternativeWithoutIngredientPrompt(
   context: MealGenerationContext,
   originalMealName: string,
   ingredientToExclude: string,
   date: string,
-  mealType: string
+  mealType: "lunch" | "dinner"
 ): string {
-  return `Alternative à "${originalMealName}" SANS "${ingredientToExclude}" (${mealType}, ${date}).
+  const banned = [...context.bannedIngredients, ingredientToExclude].filter(Boolean)
+  const recent = context.recentMeals.slice(0, 20).join(" | ") || "aucun"
+  const currentMonth = new Date(date).getMonth() + 1
+  const seasonalIngredients = getSeasonalIngredientsAlsace(currentMonth)
 
-CONTRAINTES:
-- Bannis: ${context.bannedIngredients.slice(0, 5).join(', ') || 'aucun'}
-- Déjà mangés: ${context.recentMeals.slice(0, 3).join(', ') || 'aucun'}
-- Style similaire si possible
-- Vaisselle minimale
+  return `
+Tu proposes une alternative à "${originalMealName}" mais SANS "${ingredientToExclude}".
 
-JSON (un seul repas):
+CONTRAINTES DURES
+- Ingrédients interdits: ${banned.join(", ")}
+- Repas récents à éviter strictement: ${recent}
+- Date: ${date}
+- mealType: ${mealType}
+- 10 ingrédients max (hors sel/poivre/huile)
+- 4 étapes max
+- 1 ustensile principal max
+- Légumes max: 2 types
+- Saisonnier (bonus, 0 à 1 ingrédient principal): ${seasonalIngredients.join(", ")}
+
+STYLE
+- Reste dans une vibe proche (comfort, gourmand) sans être une variante déguisée.
+- Supermarché standard.
+
+SORTIE
+Uniquement JSON valide:
+
 {
   "meals": [{
-    "name": "...",
+    "name": "string",
+    "description": "string (<= 15 mots)",
     "mealType": "${mealType}",
     "date": "${date}",
-    "prepTime": 15,
-    "cookTime": 30,
+    "prepTime": number,
+    "cookTime": number,
     "servings": 2,
-    "tags": ["one-pan"],
-    "instructions": ["Étape 1", "Étape 2"],
-    "dishwareTips": "...",
-    "ingredients": [{"name": "...", "quantity": 500, "unit": "g"}]
+    "tags": ["one-pan", "comfort", "quick"],
+    "instructions": ["Étape 1", "Étape 2", "Étape 3", "Étape 4"],
+    "dishwareTips": "string",
+    "ingredients": [{"name":"string","quantity":number,"unit":"g|ml|pcs|tbsp|tsp"}]
   }],
-  "seasonalIngredients": [],
-  "dishwareScore": 8
-}`
+  "seasonalIngredients": ["string"],
+  "dishwareScore": number
+}
+`.trim()
 }
 
-/**
- * Prompt pour extraire/standardiser liste d'ingrédients
- */
 export function extractIngredientsPrompt(recipeText: string): string {
-  return `Extrais ingrédients + quantités:
+  return `
+Tu extrais une liste d’ingrédients NORMALISÉE avec quantités et unités.
+Objectif: supermarché standard, unités cohérentes, pas de doublons.
 
+RÈGLES
+- Regrouper les synonymes (ex: "tomates" et "tomate" => "tomate")
+- Unités: g, ml, pcs, tbsp, tsp
+- Si quantité absente: mettre quantity: 1 et unit: "pcs" (ou estimer raisonnablement)
+- Retourner uniquement du JSON valide
+
+TEXTE RECETTE
 ${recipeText}
 
-JSON:
+JSON
 {
-  "ingredients": [{"name": "...", "quantity": 500, "unit": "g"}]
-}`
+  "ingredients": [
+    { "name": "string", "quantity": number, "unit": "g|ml|pcs|tbsp|tsp", "notes": "string optionnel" }
+  ]
+}
+`.trim()
 }
 
 /**
- * Fruits et légumes de saison en Alsace (simplifié pour MVP)
+ * Fruits et légumes de saison en Alsace (MVP)
+ * Remarque produit: ce tableau sert de "suggestion" et non d’obligation.
  */
 function getSeasonalIngredientsAlsace(month: number): string[] {
   const seasonal: Record<number, string[]> = {
-    1: ['chou', 'carotte', 'céleri', 'endive', 'poireau', 'pomme de terre', 'potiron'],
-    2: ['chou', 'carotte', 'céleri', 'endive', 'poireau', 'pomme de terre'],
-    3: ['asperge', 'carotte', 'céleri', 'épinard', 'poireau', 'radis'],
-    4: ['asperge', 'carotte', 'épinard', 'laitue', 'radis', 'petits pois'],
-    5: ['asperge', 'concombre', 'épinard', 'laitue', 'radis', 'fraises', 'petits pois'],
-    6: ['concombre', 'courgette', 'laitue', 'tomate', 'fraises', 'cerises', 'petits pois'],
-    7: ['courgette', 'aubergine', 'tomate', 'haricot vert', 'cerises', 'pêches', 'abricots'],
-    8: ['courgette', 'aubergine', 'tomate', 'haricot vert', 'pêches', 'abricots', 'prunes'],
-    9: ['courgette', 'aubergine', 'tomate', 'haricot vert', 'pomme', 'poire', 'raisin'],
-    10: ['chou', 'carotte', 'courge', 'poireau', 'pomme', 'poire', 'raisin'],
-    11: ['chou', 'carotte', 'courge', 'endive', 'poireau', 'pomme', 'pomme de terre'],
-    12: ['chou', 'carotte', 'céleri', 'endive', 'poireau', 'pomme de terre', 'potiron'],
+    1: ["carotte", "poireau", "pomme de terre", "courge", "pomme"],
+    2: ["carotte", "poireau", "pomme de terre", "pomme"],
+    3: ["épinard", "radis", "carotte", "poireau"],
+    4: ["asperge", "laitue", "radis", "épinard"],
+    5: ["asperge", "concombre", "fraises", "laitue", "petits pois"],
+    6: ["courgette", "tomate", "concombre", "cerises", "haricot vert"],
+    7: ["courgette", "tomate", "haricot vert", "abricot", "pêche"],
+    8: ["courgette", "tomate", "haricot vert", "prune", "pêche"],
+    9: ["tomate", "haricot vert", "pomme", "poire", "raisin"],
+    10: ["courge", "carotte", "poireau", "pomme", "raisin"],
+    11: ["carotte", "poireau", "pomme de terre", "pomme"],
+    12: ["carotte", "poireau", "pomme de terre", "courge"],
   }
   return seasonal[month] || []
 }
