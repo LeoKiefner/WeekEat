@@ -89,7 +89,7 @@ export async function inviteToHousehold(householdId: string, email: string) {
   const inviter = household.members.find((m) => m.userId === session.user.id)
   const inviterName = inviter?.user.name || session.user.name || "Un membre"
 
-  const invitationLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/invite/${invitation.token}`
+  const invitationLink = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/join/${invitation.token}`
 
   try {
     console.log(`[INVITATION] Tentative d'envoi d'invitation à ${email} pour le foyer ${household.name}`)
