@@ -1,0 +1,279 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Utilisateurs
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  households    HouseholdMember[]
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+// Foyers
+model Household {
+  id          String   @id @default(cuid())
+  name        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Paramètres du foyer
+  mealsPerWeek        Int      @default(7) // Nombre de repas à planifier par semaine
+  prioritizeSeasonal  Boolean  @default(true) // Priorité saisonnalité Alsace
+  minDishware         Boolean  @default(true) // Optimisation vaisselle
+
+  // Relations
+  members         HouseholdMember[]
+  mealPlans       MealPlan[]
+  bannedIngredients BannedIngredient[]
+  preferences     HouseholdPreference[]
+  constraints     MealConstraint[]
+
+  @@map("households")
+}
+
+// Membres d'un foyer (relation many-to-many)
+model HouseholdMember {
+  id          String   @id @default(cuid())
+  userId      String
+  householdId String
+  role        String   @default("member") // "owner" ou "member"
+  joinedAt    DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, householdId])
+  @@map("household_members")
+}
+
+// Planification de repas (semaine)
+model MealPlan {
+  id          String   @id @default(cuid())
+  householdId String
+  weekStart   DateTime // Date de début de la semaine (lundi)
+  weekEnd     DateTime // Date de fin de la semaine (dimanche)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  meals     Meal[]
+
+  @@unique([householdId, weekStart])
+  @@map("meal_plans")
+}
+
+// Repas individuel dans une planification
+model Meal {
+  id              String   @id @default(cuid())
+  mealPlanId      String
+  date            DateTime // Date du repas
+  mealType        String   // "breakfast", "lunch", "dinner"
+  recipeId        String?  // Peut être null si pas encore généré
+  prepTime        Int?     // Temps de préparation en minutes
+  isMealPrep      Boolean  @default(false) // Préparé pour un autre repas
+  mealPrepForId   String?  // ID du repas pour lequel c'est du meal-prep
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  mealPlan        MealPlan @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipe          Recipe?  @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  mealPrepFor     Meal?    @relation("MealPrepRelation", fields: [mealPrepForId], references: [id])
+  mealPrepFrom    Meal[]   @relation("MealPrepRelation")
+  reactions       MealReaction[]
+  constraints     MealConstraint[]
+
+  @@map("meals")
+}
+
+// Recettes
+model Recipe {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  instructions    String   // Instructions de préparation
+  dishwareTips    String?  // Astuces pour minimiser la vaisselle
+  prepTime        Int      // Temps de préparation en minutes
+  cookTime        Int      // Temps de cuisson en minutes
+  servings        Int      @default(2)
+  tags            String   @default("[]") // JSON array: ["one-pan", "vegetarian", "quick", "batch-cook", etc.]
+  aiGenerated     Boolean  @default(true)
+  aiPromptVersion String?  // Version du prompt utilisé pour générer
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  meals       Meal[]
+  ingredients RecipeIngredient[]
+
+  @@map("recipes")
+}
+
+// Ingrédients (table de référence)
+model Ingredient {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  category    String   // "vegetables", "fruits", "meat", "dairy", "pantry", etc.
+  aisle       String?  // Rayon du supermarché
+  unit        String   @default("g") // Unité par défaut: g, kg, unité, etc.
+  seasonalMonths String @default("[]") // JSON array: Mois de saisonnalité en Alsace (1-12)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipeIngredients RecipeIngredient[]
+  bannedInHouseholds BannedIngredient[]
+
+  @@map("ingredients")
+}
+
+// Relation entre recettes et ingrédients (avec quantités)
+model RecipeIngredient {
+  id           String   @id @default(cuid())
+  recipeId     String
+  ingredientId String
+  quantity     Float    // Quantité
+  unit         String   // Unité (g, kg, unité, cuillère, etc.)
+  notes        String?  // Notes optionnelles
+
+  recipe     Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, ingredientId])
+  @@map("recipe_ingredients")
+}
+
+// Ingrédients bannis par foyer
+model BannedIngredient {
+  id           String   @id @default(cuid())
+  householdId  String
+  ingredientId String
+  reason       String?  // Raison du bannissement
+  bannedAt     DateTime @default(now())
+  bannedBy     String?  // User ID qui a banni
+
+  household  Household  @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, ingredientId])
+  @@map("banned_ingredients")
+}
+
+// Préférences du foyer
+model HouseholdPreference {
+  id          String   @id @default(cuid())
+  householdId String
+  key         String   // "diet", "allergies", "objectives", "timeConstraints", etc.
+  value       String   // JSON string ou valeur simple
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@unique([householdId, key])
+  @@map("household_preferences")
+}
+
+// Contraintes de calendrier (ex: "jeudi soir resto")
+model MealConstraint {
+  id          String   @id @default(cuid())
+  householdId String
+  mealId      String?  // Peut être null si contrainte générale
+  type        String   // "no_meal", "meal_prep", "restaurant", "batch_cook"
+  date        DateTime // Date concernée
+  description String?  // Description de la contrainte
+  mealPrepForMealId String? // Si meal_prep, ID du repas cible
+  createdAt   DateTime @default(now())
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  meal      Meal?     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@map("meal_constraints")
+}
+
+// Réactions aux repas (likes/dislikes pour apprentissage)
+model MealReaction {
+  id          String   @id @default(cuid())
+  mealId      String
+  userId      String   // Utilisateur qui réagit
+  reaction    String   // "like", "dislike", "ban_ingredient"
+  ingredientId String? // Si ban_ingredient, l'ingrédient banni
+  createdAt   DateTime @default(now())
+
+  meal       Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@unique([mealId, userId])
+  @@map("meal_reactions")
+}
+
+// Invitations de foyer
+model HouseholdInvitation {
+  id          String   @id @default(cuid())
+  householdId String
+  email       String
+  token       String   @unique
+  invitedBy   String   // User ID
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@unique([householdId, email])
+  @@map("household_invitations")
+}
+
+// NextAuth tables
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
