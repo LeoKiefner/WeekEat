@@ -150,7 +150,7 @@ export async function generateWeekMeals(
 export async function replaceMeal(
   context: Parameters<typeof generateWeekPrompt>[0],
   dateToReplace: string,
-  mealType: string,
+  mealType: "lunch" | "dinner",
   reason?: string
 ): Promise<GeneratedWeek> {
   const prompt = replaceMealPrompt(context, dateToReplace, mealType, reason)
@@ -188,7 +188,7 @@ export async function getAlternativeWithoutIngredient(
   originalMealName: string,
   ingredientToExclude: string,
   date: string,
-  mealType: string
+  mealType: "lunch" | "dinner"
 ): Promise<GeneratedWeek> {
   const prompt = alternativeWithoutIngredientPrompt(
     context,

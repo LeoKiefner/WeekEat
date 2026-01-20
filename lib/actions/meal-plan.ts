@@ -79,8 +79,8 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
   // Construire le contexte pour l'IA
   const context: MealGenerationContext = {
     householdId,
-    bannedIngredients: household.bannedIngredients.map((bi) => bi.ingredient.name),
-    recentMeals: recentMeals.map((m) => m.recipe?.name || "").filter(Boolean),
+    bannedIngredients: household.bannedIngredients.map((bi: { ingredient: { name: string } }) => bi.ingredient.name),
+    recentMeals: recentMeals.map((m: { recipe: { name: string } | null }) => m.recipe?.name || "").filter(Boolean),
     preferences: {
       diet: household.preferences.find((p) => p.key === "diet")?.value
         ? JSON.parse(household.preferences.find((p) => p.key === "diet")!.value)
@@ -101,7 +101,7 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
     mealsPerWeek: household.mealsPerWeek || defaultMealsPerWeek,
     prioritizeSeasonal: household.prioritizeSeasonal,
     minDishware: household.minDishware,
-    constraints: household.constraints.map((c) => ({
+    constraints: household.constraints.map((c: { date: Date; type: string; description: string | null }) => ({
       date: c.date.toISOString().split("T")[0],
       type: c.type as any,
       description: c.description || undefined,
@@ -184,7 +184,7 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
         aiGenerated: true,
         aiPromptVersion: "1.0",
         ingredients: {
-          create: recipeIngredients.map((ri) => ({
+          create: recipeIngredients.map((ri: { ingredientId: string; quantity: number; unit: string; notes: string | null }) => ({
             ingredientId: ri.ingredientId,
             quantity: ri.quantity,
             unit: ri.unit,
@@ -463,7 +463,7 @@ export async function replaceMealInPlan(
 
   const household = currentMeal.mealPlan.household
   const mealDate = currentMeal.date.toISOString().split("T")[0]
-  const mealType = currentMeal.mealType
+  const mealType = currentMeal.mealType as "lunch" | "dinner"
 
   // Récupérer les repas des 30 derniers jours pour variété
   const thirtyDaysAgo = new Date()
@@ -492,8 +492,8 @@ export async function replaceMealInPlan(
   // Construire le contexte pour l'IA
   const context: MealGenerationContext = {
     householdId: household.id,
-    bannedIngredients: household.bannedIngredients.map((bi) => bi.ingredient.name),
-    recentMeals: recentMeals.map((m) => m.recipe?.name || "").filter(Boolean),
+    bannedIngredients: household.bannedIngredients.map((bi: { ingredient: { name: string } }) => bi.ingredient.name),
+    recentMeals: recentMeals.map((m: { recipe: { name: string } | null }) => m.recipe?.name || "").filter(Boolean),
     preferences: {
       diet: household.preferences.find((p) => p.key === "diet")?.value
         ? JSON.parse(household.preferences.find((p) => p.key === "diet")!.value)
@@ -511,7 +511,7 @@ export async function replaceMealInPlan(
     mealsPerWeek: household.mealsPerWeek || 14,
     prioritizeSeasonal: household.prioritizeSeasonal,
     minDishware: household.minDishware,
-    constraints: household.constraints.map((c) => ({
+    constraints: household.constraints.map((c: { date: Date; type: string; description: string | null }) => ({
       date: c.date.toISOString().split("T")[0],
       type: c.type as any,
       description: c.description || undefined,
@@ -565,14 +565,14 @@ export async function replaceMealInPlan(
       tags: stringifyTags(newMealData.tags),
       aiGenerated: true,
       aiPromptVersion: "1.0",
-      ingredients: {
-        create: recipeIngredients.map((ri) => ({
-          ingredientId: ri.ingredientId,
-          quantity: ri.quantity,
-          unit: ri.unit,
-          notes: ri.notes,
-        })),
-      },
+        ingredients: {
+          create: recipeIngredients.map((ri: { ingredientId: string; quantity: number; unit: string; notes: string | null }) => ({
+            ingredientId: ri.ingredientId,
+            quantity: ri.quantity,
+            unit: ri.unit,
+            notes: ri.notes,
+          })),
+        },
     },
   })
 

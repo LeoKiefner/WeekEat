@@ -34,6 +34,31 @@ export interface MealGenerationContext {
   }>
 }
 
+export interface GeneratedMeal {
+  name: string
+  description?: string
+  mealType: 'breakfast' | 'lunch' | 'dinner'
+  date: string
+  prepTime: number
+  cookTime: number
+  servings: number
+  tags: string[]
+  instructions: string
+  dishwareTips: string
+  ingredients: Array<{
+    name: string
+    quantity: number
+    unit: string
+    notes?: string
+  }>
+}
+
+export interface GeneratedWeek {
+  meals: GeneratedMeal[]
+  seasonalIngredients: string[]
+  dishwareScore: number
+}
+
 export function generateWeekPrompt(context: MealGenerationContext, weekStart?: Date): string {
   const startDate = weekStart || getWeekStart()
   startDate.setHours(0, 0, 0, 0)
