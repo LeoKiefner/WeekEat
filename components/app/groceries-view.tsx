@@ -52,16 +52,41 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
   const [items, setItems] = useState<GroceryItem[]>(() => {
     if (!mealPlan || !mealPlan.meals) return []
 
+    // Normaliser le nom pour regrouper les ingrédients similaires
+    // (mettre en minuscule, supprimer les accents)
+    function normalizeName(name: string): string {
+      return name
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Supprimer les accents
+        .trim()
+    }
+
+    // Créer une clé unique basée sur le nom normalisé et l'unité
+    // Si l'unité est différente, on peut quand même regrouper pour le même nom
+    function createKey(name: string, unit: string): string {
+      const normalized = normalizeName(name)
+      // Si l'unité est similaire (g/ml/pcs), on regroupe quand même
+      // Sinon on garde l'unité dans la clé pour éviter de mélanger g et pcs par exemple
+      const unitCategory = ["g", "kg", "mg"].includes(unit.toLowerCase()) 
+        ? "weight" 
+        : ["ml", "l", "cl"].includes(unit.toLowerCase())
+        ? "volume"
+        : unit.toLowerCase()
+      return `${normalized}_${unitCategory}`
+    }
+
     const aggregated = new Map<string, GroceryItem>()
 
     mealPlan.meals.forEach((meal) => {
       if (!meal.recipe) return
 
       meal.recipe.ingredients.forEach((ri) => {
-        const key = ri.ingredient.id
+        const key = createKey(ri.ingredient.name, ri.unit)
         const existing = aggregated.get(key)
 
         if (existing) {
+          // Même ingrédient (nom normalisé similaire), additionner les quantités
           existing.totalQuantity += ri.quantity
           if (ri.notes && !existing.notes.includes(ri.notes)) {
             existing.notes.push(ri.notes)
