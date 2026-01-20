@@ -47,7 +47,7 @@ npm run dev
 - **Langage**: TypeScript
 - **Base de données**: PostgreSQL + Prisma
 - **Authentification**: NextAuth (magic link email)
-- **IA**: OpenAI GPT-4o-mini
+- **IA**: OpenAI gpt-5-mini
 - **UI**: Tailwind CSS + shadcn/ui
 - **Emails**: Resend (à configurer)
 

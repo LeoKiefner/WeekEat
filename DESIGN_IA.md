@@ -18,7 +18,7 @@
    - Instructions JSON strictes
 
 3. **Appel IA**
-   - OpenAI GPT-4o-mini (MVP)
+   - OpenAI gpt-5-mini (MVP)
    - Temperature: 0.7 (créativité modérée)
    - `response_format: { type: 'json_object' }` pour forcer JSON
 
@@ -190,7 +190,7 @@ Context: "Historique des préférences du foyer:
 
 ### MVP
 - Pas de cache (génération à la demande)
-- Coût estimé: ~0.01€ par semaine (GPT-4o-mini)
+- Coût estimé: ~0.01€ par semaine (gpt-5-mini)
 
 ### V2
 - Cache par contexte (hash du contexte)
@@ -199,6 +199,6 @@ Context: "Historique des préférences du foyer:
 
 ## Coûts estimés
 
-- GPT-4o-mini: ~500 tokens input, ~2000 tokens output
+- gpt-5-mini: ~500 tokens input, ~2000 tokens output
 - Coût: ~0.002$ par génération
 - Avec cache: <0.01$ par utilisateur/semaine

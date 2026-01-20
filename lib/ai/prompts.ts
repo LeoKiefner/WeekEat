@@ -185,6 +185,67 @@ RAPPELS
 `.trim()
 }
 
+/**
+ * Génère un prompt pour un seul repas (simplifié et optimisé)
+ */
+export function generateSingleMealPrompt(
+  context: MealGenerationContext,
+  date: string,
+  mealType: "lunch" | "dinner"
+): string {
+  const banned = context.bannedIngredients.join(", ") || "aucun"
+  const recent = context.recentMeals.slice(0, 15).join(" | ") || "aucun" // Réduit à 15 pour économiser tokens
+  const currentMonth = new Date(date).getMonth() + 1
+  const seasonalIngredients = getSeasonalIngredientsAlsace(currentMonth)
+  const diet = context.preferences?.diet?.join(", ") || "aucune"
+  const allergies = context.preferences?.allergies?.join(", ") || "aucune"
+
+  // Calculer le nombre de repas avec viande déjà générés aujourd'hui (si on génère une semaine complète)
+  // Pour un seul repas, on simplifie en demandant juste de respecter la fréquence si applicable
+  const meatConstraint = context.meatFrequency !== undefined && context.preferences.diet?.includes("omnivore")
+    ? `- Si régime omnivore, respecter la fréquence de viande: ${context.meatFrequency} repas avec viande par semaine maximum.`
+    : ""
+
+  return `
+Tu génères UN SEUL repas: ${mealType} pour le ${date}.
+
+CONTRAINTES DURES
+- Ingrédients bannis: ${banned}
+- Repas récents à éviter: ${recent}
+- 10 ingrédients max (hors sel/poivre/huile)
+- 4 étapes max
+- 1 ustensile principal max
+- Légumes max: 2 types
+${meatConstraint}
+- Régime: ${diet}
+- Allergies: ${allergies}
+
+STYLE
+Repas simple, appétissant, supermarché standard. Pas de recette complexe ou punitive.
+
+SORTIE (JSON uniquement, sans texte):
+{
+  "meals": [{
+    "name": "string (nom court)",
+    "description": "string (1 phrase, max 15 mots)",
+    "mealType": "${mealType}",
+    "date": "${date}",
+    "prepTime": number (5-30 min),
+    "cookTime": number (10-45 min),
+    "servings": 2,
+    "tags": ["one-pan", "comfort", "quick"],
+    "instructions": ["Étape 1", "Étape 2", "Étape 3", "Étape 4"],
+    "dishwareTips": "string (1 phrase)",
+    "ingredients": [
+      {"name": "string", "quantity": number, "unit": "g|ml|pcs|tbsp|tsp", "notes": "optionnel"}
+    ]
+  }],
+  "seasonalIngredients": ["${seasonalIngredients[0] || ""}"],
+  "dishwareScore": 7
+}
+`.trim()
+}
+
 export function replaceMealPrompt(
   context: MealGenerationContext,
   dateToReplace: string,

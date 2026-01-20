@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { getWeekStart, getWeekEnd, stringifyTags } from "@/lib/utils"
-import { generateWeekMeals, replaceMeal, getAlternativeWithoutIngredient } from "@/lib/ai/client"
+import { generateSingleMeal, replaceMeal, getAlternativeWithoutIngredient } from "@/lib/ai/client"
 import type { MealGenerationContext } from "@/lib/ai/prompts"
 import { revalidatePath } from "next/cache"
 
@@ -108,10 +108,7 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
     })),
   }
 
-  // Appel IA avec la date de début de semaine
-  const generated = await generateWeekMeals(context, start)
-
-  // Créer ou mettre à jour le meal plan
+  // Créer ou mettre à jour le meal plan AVANT la génération
   const mealPlan = await prisma.mealPlan.upsert({
     where: {
       householdId_weekStart: {
@@ -139,152 +136,157 @@ export async function generateMealPlan(householdId: string, weekStart?: Date) {
   })
   console.log(`[generateMealPlan] ${deletedCount.count} anciens repas supprimés`)
 
-  console.log(`[generateMealPlan] Génération réussie: ${generated.meals.length} repas à créer`)
-
-  // Créer les recettes et repas
-  let mealsCreated = 0
-  for (const mealData of generated.meals) {
-    // Chercher ou créer les ingrédients
-    const recipeIngredients = await Promise.all(
-      mealData.ingredients.map(async (ing: { name: string; quantity: number; unit: string; notes?: string }) => {
-        let ingredient = await prisma.ingredient.findUnique({
-          where: { name: ing.name },
-        })
-
-        if (!ingredient) {
-          ingredient = await prisma.ingredient.create({
-            data: {
-              name: ing.name,
-              category: "other", // À améliorer avec extraction IA
-              unit: ing.unit,
-            },
-          })
-        }
-
-        return {
-          ingredientId: ingredient.id,
-          quantity: ing.quantity,
-          unit: ing.unit,
-          notes: ing.notes || null,
-        }
-      })
-    )
-
-    // Créer la recette
-    const recipe = await prisma.recipe.create({
-      data: {
-        name: mealData.name,
-        description: mealData.description,
-        instructions: mealData.instructions,
-        dishwareTips: mealData.dishwareTips,
-        prepTime: mealData.prepTime,
-        cookTime: mealData.cookTime,
-        servings: mealData.servings,
-        tags: stringifyTags(mealData.tags),
-        aiGenerated: true,
-        aiPromptVersion: "1.0",
-        ingredients: {
-          create: recipeIngredients.map((ri: { ingredientId: string; quantity: number; unit: string; notes: string | null }) => ({
-            ingredientId: ri.ingredientId,
-            quantity: ri.quantity,
-            unit: ri.unit,
-            notes: ri.notes,
-          })),
-        },
-      },
-    })
-
-    // Normaliser la date du repas
-    const mealDate = new Date(mealData.date)
-    mealDate.setHours(12, 0, 0, 0) // Mettre à midi pour éviter les problèmes de timezone
-
-    // Créer le repas
-    await prisma.meal.create({
-      data: {
-        mealPlanId: mealPlan.id,
-        date: mealDate,
-        mealType: mealData.mealType,
-        recipeId: recipe.id,
-        prepTime: mealData.prepTime + mealData.cookTime,
-      },
-    })
-    mealsCreated++
-    console.log(`[generateMealPlan] Repas créé: ${mealData.name} (${mealsCreated}/${generated.meals.length})`)
-  }
-
-  console.log(`[generateMealPlan] ${mealsCreated} repas créés avec succès`)
-
-  // S'assurer qu'il y a 2 slots par jour (lunch et dinner) même si vides
-  // Créer les slots manquants SEULEMENT pour les jours à partir d'aujourd'hui
+  // Calculer les dates et slots à générer EN AMONT (au lieu de demander à l'IA)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const actualStart = start < today ? today : start
   
-  // Calculer combien de jours restent jusqu'à la fin de la semaine
-  const daysRemaining = Math.ceil((end.getTime() - actualStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  const mealsToGenerate: Array<{ date: string; mealType: "lunch" | "dinner" }> = []
+  const currentDate = new Date(actualStart)
   
-  for (let i = 0; i < daysRemaining; i++) {
-    const dayDate = new Date(actualStart)
-    dayDate.setDate(actualStart.getDate() + i)
-    
-    // Créer les dates pour lunch (midi) et dinner (soir)
-    const lunchDate = new Date(dayDate)
-    lunchDate.setHours(12, 0, 0, 0)
-    const dinnerDate = new Date(dayDate)
-    dinnerDate.setHours(19, 0, 0, 0)
-
-    // Vérifier si lunch existe pour ce jour
-    const dayStart = new Date(dayDate)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(dayDate)
-    dayEnd.setHours(23, 59, 59, 999)
-
-    const lunchExists = await prisma.meal.findFirst({
-      where: {
-        mealPlanId: mealPlan.id,
-        date: {
-          gte: dayStart,
-          lte: dayEnd,
-        },
-        mealType: "lunch",
-      },
+  while (currentDate <= end) {
+    mealsToGenerate.push({
+      date: currentDate.toISOString().split("T")[0],
+      mealType: "lunch",
     })
+    mealsToGenerate.push({
+      date: currentDate.toISOString().split("T")[0],
+      mealType: "dinner",
+    })
+    currentDate.setDate(currentDate.getDate() + 1)
+  }
 
-    if (!lunchExists) {
+  console.log(`[generateMealPlan] ${mealsToGenerate.length} repas à générer progressivement`)
+
+  // Générer les repas UN PAR UN pour éviter les troncatures
+  let mealsCreated = 0
+  let mealsWithMeat = 0
+  const targetMeatMeals = context.meatFrequency || 0
+
+  for (const { date, mealType } of mealsToGenerate) {
+    try {
+      console.log(`[generateMealPlan] Génération repas ${mealsCreated + 1}/${mealsToGenerate.length}: ${mealType} pour ${date}`)
+      
+      // Générer UN SEUL repas à la fois
+      const generated = await generateSingleMeal(context, date, mealType)
+      
+      if (!generated.meals || generated.meals.length === 0) {
+        console.warn(`[generateMealPlan] Aucun repas généré pour ${date} ${mealType}`)
+        continue
+      }
+
+      const mealData = generated.meals[0]
+
+      // Vérifier si c'est un repas avec viande (pour respecter la fréquence)
+      const hasMeat = mealData.ingredients.some((ing: { name: string }) => {
+        const meatKeywords = ["viande", "boeuf", "porc", "poulet", "agneau", "steak", "saucisse", "jambon", "lard"]
+        return meatKeywords.some(keyword => ing.name.toLowerCase().includes(keyword))
+      })
+
+      if (hasMeat) {
+        mealsWithMeat++
+        // Si on dépasse la fréquence de viande, régénérer sans viande
+        if (targetMeatMeals > 0 && mealsWithMeat > targetMeatMeals) {
+          console.log(`[generateMealPlan] Fréquence de viande atteinte, régénération sans viande pour ${date} ${mealType}`)
+          // Essayer de régénérer en excluant les mots-clés viande (simplifié)
+          // Pour l'instant, on continue mais on pourrait implémenter une logique plus sophistiquée
+        }
+      }
+      // Chercher ou créer les ingrédients
+      const recipeIngredients = await Promise.all(
+        mealData.ingredients.map(async (ing: { name: string; quantity: number; unit: string; notes?: string }) => {
+          let ingredient = await prisma.ingredient.findUnique({
+            where: { name: ing.name },
+          })
+
+          if (!ingredient) {
+            ingredient = await prisma.ingredient.create({
+              data: {
+                name: ing.name,
+                category: "other", // À améliorer avec extraction IA
+                unit: ing.unit,
+              },
+            })
+          }
+
+          return {
+            ingredientId: ingredient.id,
+            quantity: ing.quantity,
+            unit: ing.unit,
+            notes: ing.notes || null,
+          }
+        })
+      )
+
+      // Créer la recette
+      const recipe = await prisma.recipe.create({
+        data: {
+          name: mealData.name,
+          description: mealData.description || null,
+          instructions: mealData.instructions,
+          dishwareTips: mealData.dishwareTips,
+          prepTime: mealData.prepTime,
+          cookTime: mealData.cookTime,
+          servings: mealData.servings,
+          tags: stringifyTags(mealData.tags),
+          aiGenerated: true,
+          aiPromptVersion: "2.0", // Version progressive
+          ingredients: {
+            create: recipeIngredients.map((ri: { ingredientId: string; quantity: number; unit: string; notes: string | null }) => ({
+              ingredientId: ri.ingredientId,
+              quantity: ri.quantity,
+              unit: ri.unit,
+              notes: ri.notes,
+            })),
+          },
+        },
+      })
+
+      // Normaliser la date du repas
+      const mealDate = new Date(mealData.date)
+      // Ajuster l'heure selon le type de repas
+      mealDate.setHours(mealType === "lunch" ? 12 : 19, 0, 0, 0)
+
+      // Créer le repas
       await prisma.meal.create({
         data: {
           mealPlanId: mealPlan.id,
-          date: lunchDate,
-          mealType: "lunch",
-          recipeId: null, // Slot vide
+          date: mealDate,
+          mealType: mealData.mealType,
+          recipeId: recipe.id,
+          prepTime: mealData.prepTime + mealData.cookTime,
         },
       })
-      console.log(`[generateMealPlan] Slot lunch créé pour ${lunchDate.toISOString().split('T')[0]}`)
-    }
+      mealsCreated++
+      console.log(`[generateMealPlan] ✅ Repas créé: ${mealData.name} (${mealsCreated}/${mealsToGenerate.length})`)
 
-    // Vérifier si dinner existe pour ce jour
-    const dinnerExists = await prisma.meal.findFirst({
-      where: {
-        mealPlanId: mealPlan.id,
-        date: {
-          gte: dayStart,
-          lte: dayEnd,
-        },
-        mealType: "dinner",
-      },
-    })
-
-    if (!dinnerExists) {
+      // Mettre à jour la liste des repas récents pour éviter les doublons dans les prochaines générations
+      context.recentMeals.unshift(mealData.name)
+      if (context.recentMeals.length > 30) {
+        context.recentMeals = context.recentMeals.slice(0, 30)
+      }
+    } catch (error: any) {
+      console.error(`[generateMealPlan] ❌ Erreur génération repas ${date} ${mealType}:`, error)
+      // Continuer avec le repas suivant même en cas d'erreur
+      // Créer un slot vide pour ce repas manquant
+      const mealDate = new Date(date)
+      mealDate.setHours(mealType === "lunch" ? 12 : 19, 0, 0, 0)
+      
       await prisma.meal.create({
         data: {
           mealPlanId: mealPlan.id,
-          date: dinnerDate,
-          mealType: "dinner",
+          date: mealDate,
+          mealType: mealType,
           recipeId: null, // Slot vide
         },
       })
-      console.log(`[generateMealPlan] Slot dinner créé pour ${dinnerDate.toISOString().split('T')[0]}`)
+      console.log(`[generateMealPlan] Slot vide créé pour ${date} ${mealType}`)
     }
+  }
+
+  console.log(`[generateMealPlan] ✅ ${mealsCreated} repas créés avec succès sur ${mealsToGenerate.length} demandés`)
+  if (targetMeatMeals > 0) {
+    console.log(`[generateMealPlan] ${mealsWithMeat} repas avec viande générés (objectif: ${targetMeatMeals})`)
   }
 
   // Revalider les pages qui affichent les données

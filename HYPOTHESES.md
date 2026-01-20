@@ -57,7 +57,7 @@
 - Features avancées (profils utilisateurs)
 
 ### 7. Modèle IA
-**Hypothèse**: GPT-4o-mini pour MVP (coût/bénéfice optimal).
+**Hypothèse**: gpt-5-mini pour MVP (coût/bénéfice optimal).
 
 **Justification**: Suffisant pour qualité MVP, upgrade possible si besoin.
 
@@ -110,7 +110,7 @@
 ### UI: Tailwind + shadcn/ui
 **Raison**: Rapidité développement, composants accessibles, design moderne.
 
-### IA: OpenAI GPT-4o-mini
+### IA: OpenAI gpt-5-mini
 **Raison**: Meilleur rapport qualité/coût pour MVP, JSON mode, rapide.
 
 ## Configurabilité

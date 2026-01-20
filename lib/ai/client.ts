@@ -85,14 +85,20 @@ async function parseAIResponse<T>(response: string, schema: z.ZodSchema<T>): Pro
 /**
  * Génère une semaine complète de repas
  */
+/**
+ * Génère une semaine complète de repas (déprécié: utilisez generateMealPlanProgressively)
+ * @deprecated Utilisez generateMealPlanProgressively pour éviter les troncatures
+ */
 export async function generateWeekMeals(
   context: Parameters<typeof generateWeekPrompt>[0],
   weekStart?: Date
 ): Promise<GeneratedWeek> {
+  // Cette fonction est dépréciée car elle génère tous les repas d'un coup
+  // et peut causer des troncatures. Utilisez generateMealPlanProgressively dans meal-plan.ts
   const prompt = generateWeekPrompt(context, weekStart)
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini', // Utiliser mini pour MVP, peut être upgradé
+    model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',
@@ -105,7 +111,7 @@ export async function generateWeekMeals(
     ],
     temperature: 0.7,
     response_format: { type: 'json_object' },
-    max_tokens: 4000, // Augmenté pour éviter les troncatures
+    max_tokens: 6000, // Augmenté pour éviter les troncatures
   })
 
   const response = completion.choices[0]?.message?.content
@@ -117,28 +123,52 @@ export async function generateWeekMeals(
 
   // Vérifier si la réponse a été tronquée
   if (finishReason === 'length') {
-    console.warn('⚠️ Réponse IA tronquée (max_tokens atteint). Tentative de récupération partielle...')
-    // Essayer de récupérer ce qui peut être parsé
-    try {
-      // Chercher le dernier repas complet dans le JSON
-      const lastMealEnd = response.lastIndexOf('}')
-      if (lastMealEnd > 0) {
-        // Essayer de fermer le JSON manuellement
-        let fixedResponse = response.substring(0, lastMealEnd + 1)
-        // Chercher où commence le tableau meals
-        const mealsStart = fixedResponse.indexOf('"meals":[')
-        if (mealsStart > 0) {
-          // Fermer le tableau meals et l'objet principal
-          fixedResponse = fixedResponse.substring(0, fixedResponse.lastIndexOf('}'))
-          fixedResponse += '], "seasonalIngredients": [], "dishwareScore": 5}'
-          console.warn('⚠️ Tentative de réparation du JSON tronqué')
-          return parseAIResponse(fixedResponse, GeneratedWeekSchema) as unknown as GeneratedWeek
-        }
-      }
-    } catch (e) {
-      console.error('Impossible de réparer le JSON tronqué:', e)
-    }
-    throw new Error('Réponse IA tronquée. Veuillez réessayer ou réduire le nombre de repas.')
+    console.warn('⚠️ Réponse IA tronquée (max_tokens atteint). Utilisez generateMealPlanProgressively pour générer progressivement.')
+    throw new Error('Réponse IA tronquée. La génération progressive est recommandée.')
+  }
+
+  return parseAIResponse(response, GeneratedWeekSchema) as unknown as GeneratedWeek
+}
+
+/**
+ * Génère un seul repas (optimisé pour éviter la troncature)
+ */
+export async function generateSingleMeal(
+  context: Parameters<typeof generateWeekPrompt>[0],
+  date: string,
+  mealType: "lunch" | "dinner"
+): Promise<GeneratedWeek> {
+  // Importer la fonction de prompt dynamiquement
+  const { generateSingleMealPrompt } = await import('./prompts')
+  const prompt = generateSingleMealPrompt(context, date, mealType)
+
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-5-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'Expert cuisine française. Réponds UNIQUEMENT en JSON valide, sans texte avant/après. Sois concis.',
+      },
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ],
+    temperature: 0.7,
+    response_format: { type: 'json_object' },
+    max_tokens: 800, // Suffisant pour un seul repas
+  })
+
+  const response = completion.choices[0]?.message?.content
+  const finishReason = completion.choices[0]?.finish_reason
+
+  if (!response) {
+    throw new Error('Aucune réponse de l\'IA')
+  }
+
+  if (finishReason === 'length') {
+    console.warn('⚠️ Réponse IA tronquée pour un seul repas (très rare)')
+    throw new Error('Réponse IA tronquée. Veuillez réessayer.')
   }
 
   return parseAIResponse(response, GeneratedWeekSchema) as unknown as GeneratedWeek
@@ -156,7 +186,7 @@ export async function replaceMeal(
   const prompt = replaceMealPrompt(context, dateToReplace, mealType, reason)
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',
@@ -199,7 +229,7 @@ export async function getAlternativeWithoutIngredient(
   )
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',
@@ -230,7 +260,7 @@ export async function extractIngredients(recipeText: string): Promise<{ ingredie
   const prompt = extractIngredientsPrompt(recipeText)
 
   const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-mini',
     messages: [
       {
         role: 'system',

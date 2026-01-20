@@ -2,7 +2,7 @@
 
 ## Version 1.0 (MVP)
 
-Tous les prompts sont dans `lib/ai/prompts.ts` et utilisent OpenAI GPT-4o-mini avec `response_format: { type: 'json_object' }`.
+Tous les prompts sont dans `lib/ai/prompts.ts` et utilisent OpenAI gpt-5-mini avec `response_format: { type: 'json_object' }`.
 
 ## 1. Générer une semaine complète
 
@@ -132,7 +132,7 @@ Normaliser une liste d'ingrédients depuis un texte de recette (import externe, 
 ## Paramètres techniques
 
 ### Modèle
-- **OpenAI GPT-4o-mini** (MVP)
+- **OpenAI gpt-5-mini** (MVP)
 - Temperature: **0.7** (génération) / **0.3** (extraction)
 - `response_format: { type: 'json_object' }` pour forcer JSON
 
