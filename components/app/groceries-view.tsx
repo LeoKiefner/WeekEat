@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { motion } from "motion/react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -187,13 +188,18 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
 
   if (!mealPlan || items.length === 0) {
     return (
-      <div className="text-center py-12 space-y-4">
-        <div className="text-6xl">🛒</div>
+      <motion.div
+        className="text-center py-12 space-y-4"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 220, damping: 24 }}
+      >
+        <div className="text-6xl animate-float">🛒</div>
         <h2 className="text-2xl font-bold">Aucune liste de courses</h2>
         <p className="text-muted-foreground">
           Générez d'abord ta semaine pour voir ta liste ici
         </p>
-      </div>
+      </motion.div>
     )
   }
 
@@ -209,7 +215,12 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
     })
 
     return (
-      <div className="space-y-6">
+      <motion.div
+        className="space-y-6"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 220, damping: 24 }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Liste de courses</h1>
@@ -235,7 +246,11 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
 
         {/* Actions export */}
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleCopy} className="flex-1">
+          <Button
+            variant="outline"
+            onClick={handleCopy}
+            className="flex-1"
+          >
             <Copy className="mr-2 h-4 w-4" />
             Copier
           </Button>
@@ -250,41 +265,50 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
           {Array.from(byAisle.entries())
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([aisle, aisleItems]) => (
-              <Card key={aisle} className="border-2 border-primary/10">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg">{aisle}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {aisleItems.map((item) => (
-                      <li
-                        key={item.ingredientId}
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
-                      >
-                        <Checkbox
-                          checked={item.checked}
-                          onCheckedChange={() => toggleItem(item.ingredientId)}
-                        />
-                        <span className="flex-1">
-                          <span className="font-medium">
-                            {item.totalQuantity} {item.unit}
-                          </span>{" "}
-                          <span>{item.name}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
+              <motion.div key={aisle} layout>
+                <Card className="border-2 border-primary/10">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">{aisle}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      {aisleItems.map((item) => (
+                        <motion.li
+                          key={item.ingredientId}
+                          layout
+                          whileTap={{ scale: 0.98 }}
+                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors"
+                        >
+                          <Checkbox
+                            checked={item.checked}
+                            onCheckedChange={() => toggleItem(item.ingredientId)}
+                          />
+                          <span className="flex-1">
+                            <span className="font-medium">
+                              {item.totalQuantity} {item.unit}
+                            </span>{" "}
+                            <span>{item.name}</span>
+                          </span>
+                        </motion.li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
         </div>
-      </div>
+      </motion.div>
     )
   }
 
   // Mode cuisine (à implémenter complètement)
   return (
-    <div className="space-y-6">
+    <motion.div
+      className="space-y-6"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 220, damping: 24 }}
+    >
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Liste de courses</h1>
         <div className="flex gap-2">
@@ -311,6 +335,6 @@ export function GroceriesView({ mealPlan }: GroceriesViewProps) {
           Mode cuisine (à venir) - Regroupement par recette pour batch cooking
         </CardContent>
       </Card>
-    </div>
+    </motion.div>
   )
 }

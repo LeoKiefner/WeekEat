@@ -2,6 +2,7 @@
 
 import { signIn } from "next-auth/react"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,9 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export function SignInForm() {
   const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -19,17 +21,23 @@ export function SignInForm() {
     setError(null)
 
     try {
-      const result = await signIn("email", {
+      const result = await signIn("credentials", {
         email,
+        password,
         callbackUrl: "/app/week",
         redirect: false,
       })
-      
+
       if (result?.error) {
-        setError("Erreur lors de l'envoi de l'email. Vérifiez votre configuration email.")
+        setError("Email ou mot de passe incorrect")
         console.error("Sign in error:", result.error)
       } else {
-        setEmailSent(true)
+        // Forcer le rafraîchissement de la session puis rediriger
+        router.refresh()
+        // Utiliser window.location pour une redirection complète qui force le rechargement
+        if (typeof window !== "undefined") {
+          window.location.href = result?.url || "/app/week"
+        }
       }
     } catch (error: any) {
       setError(error.message || "Une erreur est survenue")
@@ -43,31 +51,19 @@ export function SignInForm() {
     await signIn("google", { callbackUrl: "/app/week" })
   }
 
-  if (emailSent) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Email envoyé</CardTitle>
-          <CardDescription>
-            Vérifiez votre boîte mail et cliquez sur le lien de connexion.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Connexion</CardTitle>
         <CardDescription>
-          Entrez votre email pour recevoir un lien de connexion
+          Connecte-toi avec ton email et ton mot de passe
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+              {error}
             </div>
           )}
           
@@ -82,9 +78,21 @@ export function SignInForm() {
               required
             />
           </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Mot de passe</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
           
           <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Envoi..." : "Recevoir le lien de connexion"}
+            {isLoading ? "Connexion..." : "Se connecter"}
           </Button>
 
           {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (

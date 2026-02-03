@@ -3,8 +3,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency } from "@/lib/utils"
-import { Clock, Heart, HeartOff, RefreshCw, Ban, ShoppingCart } from "lucide-react"
+import { Clock, Heart, HeartOff, RefreshCw, Ban } from "lucide-react"
 import { useState } from "react"
 import { parseTags } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -19,6 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { motion } from "motion/react"
 
 interface Recipe {
   id: string
@@ -113,11 +113,22 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
   const totalTime = meal.recipe.prepTime + meal.recipe.cookTime
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto px-4">
+    <motion.div
+      className="space-y-6 max-w-2xl mx-auto px-4"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 220, damping: 24 }}
+    >
       {/* Header */}
       <div className="space-y-4">
         <div className="text-center space-y-2">
-          <div className="text-6xl mb-4">🍽️</div>
+          <motion.div
+            className="text-6xl mb-4"
+            animate={{ rotate: [0, -5, 5, 0] }}
+            transition={{ duration: 1.2, repeat: Infinity, repeatDelay: 3 }}
+          >
+            🍽️
+          </motion.div>
           <h1 className="text-3xl font-bold">{meal.recipe.name}</h1>
           {meal.recipe.description && (
             <p className="text-muted-foreground">{meal.recipe.description}</p>
@@ -145,8 +156,10 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
           <ul className="space-y-3">
             {meal.recipe.ingredients.map((ri) => {
               return (
-                <li
+                <motion.li
                   key={ri.id}
+                  layout
+                  whileTap={{ scale: 0.98 }}
                   className="flex justify-between items-center group cursor-pointer hover:bg-accent/50 p-3 rounded-xl -mx-1 transition-all border border-transparent hover:border-primary/20"
                   onClick={() => openBanDialog(ri.ingredient.id, ri.ingredient.name)}
                 >
@@ -167,7 +180,7 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
                       <Ban className="h-4 w-4 text-destructive" />
                     </button>
                   </div>
-                </li>
+                </motion.li>
               )
             })}
           </ul>
@@ -188,7 +201,13 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
               if (!cleanStep) return null
               
               return (
-                <div key={i} className="flex gap-4 group">
+                <motion.div
+                  key={i}
+                  className="flex gap-4 group"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
                   <div className="flex-shrink-0">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground flex items-center justify-center text-lg font-bold shadow-sm group-hover:shadow-md transition-shadow">
                       {i + 1}
@@ -197,7 +216,7 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
                   <div className="flex-1 pt-2">
                     <p className="text-base leading-relaxed text-foreground">{cleanStep}</p>
                   </div>
-                </div>
+                </motion.div>
               )
             })}
           </div>
@@ -283,6 +302,6 @@ export function RecipeView({ meal, userId }: RecipeViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </motion.div>
   )
 }

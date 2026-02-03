@@ -17,6 +17,7 @@ model User {
   name          String?
   emailVerified DateTime?
   image         String?
+  passwordHash  String?   // Hash du mot de passe pour l'authentification par mot de passe
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

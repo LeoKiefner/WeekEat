@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { getUserHouseholds } from "@/lib/actions/household"
 import { getMealPlan } from "@/lib/actions/meal-plan"
 import { WeekHomeView } from "@/components/app/week-home-view"
@@ -12,12 +10,6 @@ export default async function WeekPage({
 }: {
   searchParams: { onboarding?: string }
 }) {
-  const session = await getServerSession(authOptions)
-
-  if (!session) {
-    redirect("/login")
-  }
-
   const households = await getUserHouseholds()
   const hasHousehold = households.length > 0
 

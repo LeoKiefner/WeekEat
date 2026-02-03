@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { motion } from "motion/react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { formatDate, parseTags } from "@/lib/utils"
@@ -116,9 +117,20 @@ export function WeekHomeView({ household, mealPlan, householdId, showOnboarding 
     : "☀️ Tomates, courgettes, haricots verts"
 
   return (
-    <div className="space-y-6 w-full">
+    <motion.div
+      className="space-y-6 w-full"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 220, damping: 24 }}
+      layout
+    >
       {/* Bandeau résumé doux */}
-      <Card className="border-2 border-primary/20 shadow-md bg-gradient-cosy">
+      <motion.div
+        layout
+        whileHover={{ y: -4, scale: 1.01 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      >
+        <Card className="border-2 border-primary/20 shadow-md bg-gradient-cosy">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">Cette semaine</CardTitle>
@@ -159,14 +171,15 @@ export function WeekHomeView({ household, mealPlan, householdId, showOnboarding 
             </div>
           )}
         </CardContent>
-      </Card>
+        </Card>
+      </motion.div>
 
       {/* Vue avec tabs (Liste et Calendrier) */}
       <WeekViewTabs mealPlan={mealPlan} householdId={householdId} />
       {/* Fin ancienne grille */}
 
       {/* Actions principales */}
-      <div className="flex flex-col gap-3 pt-4">
+      <motion.div className="flex flex-col gap-3 pt-4" layout>
         <GenerateWeekButton householdId={householdId} variant="secondary" />
         <Button
           asChild
@@ -179,8 +192,8 @@ export function WeekHomeView({ household, mealPlan, householdId, showOnboarding 
             Optimiser la liste de courses
           </Link>
         </Button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
